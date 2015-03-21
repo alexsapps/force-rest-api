@@ -10,6 +10,8 @@ public class SessionRefreshTest {
 	public void testSessionRefresh() {
 		
 		ForceApi api = new ForceApi(new ApiConfig()
+			.setLoginEndpoint(Fixture.get("loginEndpoint"))
+			.setApiVersion(Fixture.get("apiVersion"))
 			.setUsername(Fixture.get("username"))
 			.setPassword(Fixture.get("password"))
 			.setClientId(Fixture.get("clientId"))

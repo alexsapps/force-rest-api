@@ -93,11 +93,11 @@ public class Http {
 				}
 					
 				}
-			} else {				
-				log.error("Bad response code: " + code + " on request:\n" + req);
+			} else {
 				is = gzipResponse ? new GZIPInputStream(conn.getErrorStream()): conn.getErrorStream();
 				HttpResponse r = new HttpResponse().setString(
 						new String(readResponse(is), "UTF-8")).setResponseCode(code);
+				log.error("Bad response code: {} on request:\n{}\nmessage:{}", code, req, r.getString());
 				return r;
 			}
 		} catch (MalformedURLException e) {

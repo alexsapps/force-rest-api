@@ -30,8 +30,6 @@ import java.io.OutputStream;
 import java.util.HashSet;
 import java.util.Set;
 
-import com.force.api.ApiVersion;
-import com.force.api.DescribeSObject;
 import com.force.api.DescribeSObject.Field;
 
 /**
@@ -49,7 +47,7 @@ public class PojoCodeGenerator {
     	out.write(content.getBytes("UTF-8"));
     }
     
-    public boolean generateCode(OutputStream out, DescribeSObject describe, ApiVersion apiVersion, String packageName) throws IOException {
+    public boolean generateCode(OutputStream out, DescribeSObject describe, String apiVersion, String packageName) throws IOException {
         if(describe == null) {
             return false;
         }

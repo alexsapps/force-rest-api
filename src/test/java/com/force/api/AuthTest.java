@@ -11,6 +11,8 @@ public class AuthTest {
 	@Test
 	public void testSoapLogin() {
 		ForceApi api = new ForceApi(new ApiConfig()
+			.setLoginEndpoint(Fixture.get("loginEndpoint"))
+			.setApiVersion(Fixture.get("apiVersion"))
 			.setUsername(Fixture.get("username"))
 			.setPassword(Fixture.get("password")));
 

@@ -20,28 +20,13 @@ public class QueryTest {
 	
 	@Before
 	public void init() {
-/*
- * {
-   "id": "https://login.salesforce.com/id/00Do0000000KLYPEA4/005o0000000iDI1AAM",
-   "issued_at": "1409855295514",
-   "scope": "id api web refresh_token",
-   "instance_url": "https://na17.salesforce.com",
-   "token_type": "Bearer",
-   "refresh_token": "5Aep861LNDQReieQSJ7bcacAdN6djdGOwrGO1FCbAOKeTG2kJvJb0IP_hFx7qwJF.FYjqKIwX6uknKdgVc4RYdS",
-   "access_token": "00Do0000000KLYP!AR8AQMbxPzbdUZ_cALmTvI6g_RwCCqvOdvI_W6u4uPU8pzQcw46UKIvz.IpjxGHtlc0WXB.cNR_OiMrrBCaRGCToyPlSx8Uj",
-   "signature": "8kCrL6Ku2i2UuYiBzGlWniFI1SDop7ELCgZ40ylS/0w="
-}
- */
-		ApiConfig apiConfig=new ApiConfig();
-		apiConfig.setClientId("3MVG9xOCXq4ID1uFGlCxL2VW44a9cWJ_fhJkx5LYhgELjoJIPj8Y2DtR84HWjDqT_VgyKindulM0omfNsb0uh");
-		apiConfig.setClientSecret("4568233188388764112");
-		ApiSession session=new ApiSession();
-		session.setAccessToken("00Do0000000KLYP!AR8AQMbxPzbdUZ_cALmTvI6g_RwCCqvOdvI_W6u4uPU8pzQcw46UKIvz.IpjxGHtlc0WXB.cNR_OiMrrBCaRGCToyPlSx8Uj");
-		session.setRefreshToken("5Aep861LNDQReieQSJ7bcacAdN6djdGOwrGO1FCbAOKeTG2kJvJb0IP_hFx7qwJF.FYjqKIwX6uknKdgVc4RYdS");
-		session.setApiEndpoint("https://na17.salesforce.com");
-		
-		
-		api = new ForceApi(apiConfig,session);
+		api = new ForceApi(new ApiConfig()
+		.setLoginEndpoint(Fixture.get("loginEndpoint"))
+		.setApiVersion(Fixture.get("apiVersion"))
+		.setUsername(Fixture.get("username"))
+		.setPassword(Fixture.get("password"))
+		.setClientId(Fixture.get("clientId"))
+		.setClientSecret(Fixture.get("clientSecret")));
 	}
 	
 	@Test

@@ -47,8 +47,12 @@ public class EndToEndOAuthFlowTest {
         // This part is what you'd normally do somewhere in your web app when
         // you want to authenticate an unauthenticate user.
 
-        ApiConfig config = new ApiConfig().setClientId(Fixture.get("clientId"))
-                .setClientSecret(Fixture.get("clientSecret")).setRedirectURI(Fixture.get("redirectURI"));
+        ApiConfig config = new ApiConfig()
+        		.setLoginEndpoint(Fixture.get("loginEndpoint"))
+        		.setApiVersion(Fixture.get("apiVersion"))
+        		.setClientId(Fixture.get("clientId"))
+                .setClientSecret(Fixture.get("clientSecret"))
+                .setRedirectURI(Fixture.get("redirectURI"));
 
         String url = Auth.startOAuthWebServerFlow(new AuthorizationRequest().apiConfig(config).state("test_state"));
         System.out.println(url);

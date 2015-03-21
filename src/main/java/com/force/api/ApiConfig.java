@@ -2,10 +2,11 @@ package com.force.api;
 
 import java.net.URI;
 import java.net.URLDecoder;
+import java.security.InvalidParameterException;
 
 public class ApiConfig {
 
-	private ApiVersion apiVersion = ApiVersion.DEFAULT_VERSION;
+	private String apiVersion = ApiVersion.DEFAULT_VERSION.toString();
 	private String username;
 	private String password;
 	private String loginEndpoint = "https://login.salesforce.com";
@@ -24,8 +25,8 @@ public class ApiConfig {
 			.setRedirectURI(redirectURI);
 	}
 	public ApiConfig() { }
-	public ApiConfig(ApiVersion apiVersion) {
-		this.apiVersion=apiVersion;
+	public ApiConfig(String apiVersion) {
+		setApiVersion(apiVersion);
 	}
 	public ApiConfig setForceURL(String url) {
 		try {
@@ -55,7 +56,9 @@ public class ApiConfig {
 		return this;
 	}
 	
-	public ApiConfig setApiVersion(ApiVersion value) {
+	public ApiConfig setApiVersion(String value) {
+		if (!value.matches("^v\\d+.\\d+$"))
+			throw new InvalidParameterException("Invalid API version");
 		apiVersion = value;
 		return this;
 	}
@@ -109,10 +112,8 @@ public class ApiConfig {
 		return redirectURI;
 	}
 
-	public ApiVersion getApiVersion() {
+	public String getApiVersion() {
 		return apiVersion;
 	}
-
-
 	
 }

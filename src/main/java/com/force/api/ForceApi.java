@@ -349,8 +349,12 @@ public class ForceApi {
 		}
 	}
 	
-	private final String uriBase() {
+	public final String uriBase() {
 		return(getSession().getApiEndpoint()+"/services/data/"+config.getApiVersion());
+	}
+	
+	public final HttpResponse customApiRequest(HttpRequest req) {
+		return apiRequest(req);
 	}
 	
 	private final HttpResponse apiRequest(HttpRequest req) {

@@ -8,13 +8,18 @@ import java.io.IOException;
 import static org.junit.Assert.*;
 
 public class DescribeTest {
-
-	static ForceApi api = new ForceApi(new ApiConfig()
-		.setUsername(Fixture.get("username"))
-		.setPassword(Fixture.get("password"))
-		.setClientId(Fixture.get("clientId"))
-		.setClientSecret(Fixture.get("clientSecret")));
-
+	
+	private ForceApi api;
+	
+	public DescribeTest() {
+		api = new ForceApi(new ApiConfig()
+			.setLoginEndpoint(Fixture.get("loginEndpoint"))
+			.setApiVersion(Fixture.get("apiVersion"))
+			.setUsername(Fixture.get("username"))
+			.setPassword(Fixture.get("password"))
+			.setClientId(Fixture.get("clientId"))
+			.setClientSecret(Fixture.get("clientSecret")));
+	}
 	
 	@Test
 	public void testDescribeGlobal() {
