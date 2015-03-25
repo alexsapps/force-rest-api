@@ -1,9 +1,19 @@
 package com.force.api;
 
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.UnsupportedEncodingException;
+import java.net.URLEncoder;
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.Map.Entry;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import com.fasterxml.jackson.annotation.JsonInclude.Include;
-import com.fasterxml.jackson.core.JsonGenerationException;
-import com.fasterxml.jackson.core.JsonParseException;
-import com.fasterxml.jackson.databind.JsonMappingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
@@ -16,21 +26,8 @@ import com.force.api.exceptions.SFApiException;
 import com.force.api.exceptions.SObjectException;
 import com.force.api.http.Http;
 import com.force.api.http.HttpRequest;
-import com.force.api.http.HttpResponse;
 import com.force.api.http.HttpRequest.ResponseFormat;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.UnsupportedEncodingException;
-import java.net.URLEncoder;
-import java.util.ArrayList;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-import java.util.Map.Entry;
+import com.force.api.http.HttpResponse;
 
 /**
  * main class for making API calls.
@@ -99,13 +96,9 @@ public class ForceApi {
 					is,Map.class);
 			log.debug("ID="+((String) resp.get("identity")));
 			return getIdentity((String) resp.get("identity"));
-		} catch (JsonParseException e) {
-			throw new SFApiException(e);
-		} catch (JsonMappingException e) {
-			throw new SFApiException(e);
 		} catch (IOException e) {
 			throw new SFApiException(e);
-		} 
+		}
 	}
 
 	public Identity getIdentity(String identityURL) {
@@ -117,10 +110,6 @@ public class ForceApi {
 			).getStream() )  {
 			return jsonMapper.readValue(
 					is, Identity.class);
-		} catch (JsonParseException e) {
-			throw new SFApiException(e);
-		} catch (JsonMappingException e) {
-			throw new SFApiException(e);
 		} catch (IOException e) {
 			throw new SFApiException(e);
 		}
@@ -136,14 +125,17 @@ public class ForceApi {
 					.header("Accept", "application/json")));
 	}
 
-	public String createSObject(String type, Object sObject) {
+	public String createSObject(String type, Object sObject) { 
+		return createSObject(type, sObject, jsonMapper);
+	}
+	public String createSObject(String type, Object sObject, ObjectMapper mapper) {
 		try (InputStream is=apiRequest(new HttpRequest(ResponseFormat.STREAM)
 					.url(uriBase()+"/sobjects/"+type)
 					.method("POST")
 					.header("Accept", "application/json")
 					.header("Content-Type", "application/json")
 					.expectsCode(201)
-					.content(jsonMapper.writeValueAsBytes(sObject))).getStream()){
+					.content(mapper.writeValueAsBytes(sObject))).getStream()){
 			// We're trying to keep Http classes clean with no reference to JSON/Jackson
 			// Therefore, we serialize to bytes before we pass object to HttpRequest().
 			// But it would be nice to have a streaming implementation. We can do that
@@ -156,29 +148,24 @@ public class ForceApi {
 			} else {
 				throw new SObjectException(result.getErrors());
 			}
-		} catch (JsonGenerationException e) {
-			throw new SFApiException(e);
-		} catch (JsonMappingException e) {
-			throw new SFApiException(e);
 		} catch (IOException e) {
 			throw new SFApiException(e);
 		}
 	}
 
 	public void updateSObject(String type, String id, Object sObject) {
+		updateSObject(type, id, sObject, jsonMapper);
+	}
+	public void updateSObject(String type, String id, Object sObject, ObjectMapper mapper) {
 		try (InputStream is=apiRequest(new HttpRequest(ResponseFormat.STREAM)
 				.url(uriBase()+"/sobjects/"+type+"/"+id+"?_HttpMethod=PATCH")
 				.method("POST")
 				.header("Accept", "application/json")
 				.header("Content-Type", "application/json")
 				.expectsCode(204)
-				.content(jsonMapper.writeValueAsBytes(sObject))
+				.content(mapper.writeValueAsBytes(sObject))
 			).getStream()){
 			// See createSObject for note on streaming ambition
-		} catch (JsonGenerationException e) {
-			throw new SFApiException(e);
-		} catch (JsonMappingException e) {
-			throw new SFApiException(e);
 		} catch (IOException e) {
 			throw new SFApiException(e);
 		}
@@ -214,14 +201,7 @@ public class ForceApi {
 				return CreateOrUpdateResult.UPDATED;
 			} else {
 				throw new ApiException(res.getResponseCode(), res.getString());
-//				System.out.println("Code: "+res.getResponseCode());
-	//			System.out.println("Message: "+res.getString());
-		//		throw new RuntimeException();
-			} 
-		} catch (JsonGenerationException e) {
-			throw new SFApiException(e);
-		} catch (JsonMappingException e) {
-			throw new SFApiException(e);
+			}
 		} catch (IOException e) {
 			throw new SFApiException(e);
 		} finally {
@@ -281,10 +261,6 @@ public class ForceApi {
             }
             result.setRecords(records);
             return result;
-        } catch (JsonParseException e) {
-            throw new SFApiException(e);
-        } catch (JsonMappingException e) {
-            throw new SFApiException(e);
         } catch (IOException e) {
             throw new SFApiException(e);
         }
@@ -296,10 +272,6 @@ public class ForceApi {
 					.method("GET")
 					.header("Accept", "application/json")).getStream()){
 			return jsonMapper.readValue(is,DescribeGlobal.class);
-		} catch (JsonParseException e) {
-			throw new SFApiException(e);
-		} catch (JsonMappingException e) {
-			throw new SFApiException(e);
 		} catch (UnsupportedEncodingException e) {
 			throw new SFApiException(e);
 		} catch (IOException e) {
@@ -323,10 +295,6 @@ public class ForceApi {
                 		jsonMapper.treeAsTokens(item), clazz));
             }
             return new DiscoverSObject<T>(describeSObjectBasic, recentItems);
-        } catch (JsonParseException e) {
-            throw new SFApiException(e);
-        } catch (JsonMappingException e) {
-            throw new SFApiException(e);
         } catch (IOException e) {
             throw new SFApiException(e);
         }
@@ -338,12 +306,6 @@ public class ForceApi {
 					.method("GET")
 					.header("Accept", "application/json")).getStream()) {
 			return jsonMapper.readValue(is,DescribeSObject.class);
-		} catch (JsonParseException e) {
-			throw new SFApiException(e);
-		} catch (JsonMappingException e) {
-			throw new SFApiException(e);
-		} catch (UnsupportedEncodingException e) {
-			throw new SFApiException(e);
 		} catch (IOException e) {
 			throw new SFApiException(e);
 		}
@@ -353,15 +315,23 @@ public class ForceApi {
 		return(getSession().getApiEndpoint()+"/services/data/"+config.getApiVersion());
 	}
 	
-	public final HttpResponse customApiRequest(HttpRequest req) {
+	public final HttpResponse customApiRequest(IForceApiCommand command) {
+		HttpRequest req = new HttpRequest(command.getResponseFormat())
+			.method(command.getMethod())
+			.content(command.getContent())
+			.expectsCode(command.getExpectedCode())
+			.url(uriBase() + command.getRelativeUri())
+			.addAllHeaders(command.getHeaders())
+			.addAllParams(command.getParameters());
+		
 		return apiRequest(req);
 	}
 	
 	private final HttpResponse apiRequest(HttpRequest req) {
 		
 		req.setAuthorization("OAuth "+getSession().getAccessToken());
-		req=req.gzip(gzip);              
-		HttpResponse res = Http.send(req);
+		req.gzip(gzip);              
+		HttpResponse res = Http.send(req, config.getHttpsProxy());
 		if(res.getResponseCode()==401) {
 			// Perform one attempt to auto renew session if possible
 			if(autoRenew) {
@@ -379,7 +349,7 @@ public class ForceApi {
 					setSession(Auth.authenticate(config));
 				}
 				req.setAuthorization("OAuth "+getSession().getAccessToken());
-				res = Http.send(req);
+				res = Http.send(req, config.getHttpsProxy());
 				if (res.getResponseCode()==401) throw new RefreshFailedApiException(401,"Tried to refresh but failed.");
 			} else {
 				if (this.observer !=null) this.observer.tokenNotRenewedSuccessfully();

@@ -8,6 +8,7 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.MalformedURLException;
+import java.net.Proxy;
 import java.net.URL;
 import java.util.zip.GZIPInputStream;
 
@@ -33,11 +34,12 @@ public class Http {
 		return bout.toByteArray();
 	}
 	
-	public static final HttpResponse send(HttpRequest req) {
+	public static final HttpResponse send(HttpRequest req, Proxy proxy) {
 		OutputStream os=null;
 		InputStream is=null;
 		try {
-			HttpURLConnection conn = (HttpURLConnection) new URL(req.getUrl()).openConnection();
+			URL url = new URL(req.getUrl());
+			HttpURLConnection conn = (HttpURLConnection) (proxy == null ? url.openConnection() : url.openConnection(proxy));
 			conn.setInstanceFollowRedirects(true);
 			conn.setRequestMethod(req.getMethod());
 			conn.setConnectTimeout(CONN_TIMEOUT);

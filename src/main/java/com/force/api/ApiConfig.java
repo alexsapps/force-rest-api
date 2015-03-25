@@ -1,5 +1,6 @@
 package com.force.api;
 
+import java.net.Proxy;
 import java.net.URI;
 import java.net.URLDecoder;
 import java.security.InvalidParameterException;
@@ -7,9 +8,10 @@ import java.security.InvalidParameterException;
 public class ApiConfig {
 
 	private String apiVersion = ApiVersion.DEFAULT_VERSION.toString();
+	private String loginEndpoint = "https://login.salesforce.com";
+	private Proxy httpsProxy;
 	private String username;
 	private String password;
-	private String loginEndpoint = "https://login.salesforce.com";
 	String clientId;
 	private String clientSecret;
 	private String redirectURI;
@@ -17,9 +19,10 @@ public class ApiConfig {
 	public ApiConfig clone() {
 		return new ApiConfig()
 			.setApiVersion(apiVersion)
+			.setHttpsProxy(httpsProxy)
+			.setLoginEndpoint(loginEndpoint)
 			.setUsername(username)
 			.setPassword(password)
-			.setLoginEndpoint(loginEndpoint)
 			.setClientId(clientId)
 			.setClientSecret(clientSecret)
 			.setRedirectURI(redirectURI);
@@ -63,6 +66,11 @@ public class ApiConfig {
 		return this;
 	}
 	
+	public ApiConfig setHttpsProxy(Proxy httpsProxy) {
+		this.httpsProxy = httpsProxy;
+		return this;
+	}
+	
 	public ApiConfig setUsername(String value) {
 		username = value;
 		return this;
@@ -88,6 +96,14 @@ public class ApiConfig {
 		return this;
 	}
 
+	public String getApiVersion() {
+		return apiVersion;
+	}
+	
+	public Proxy getHttpsProxy() {
+		return httpsProxy;
+	}
+	
 	public String getUsername() {
 		return username;
 	}
@@ -112,8 +128,4 @@ public class ApiConfig {
 		return redirectURI;
 	}
 
-	public String getApiVersion() {
-		return apiVersion;
-	}
-	
 }

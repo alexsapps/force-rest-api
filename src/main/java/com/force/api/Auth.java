@@ -22,18 +22,19 @@ public class Auth {
 
 	private static final ObjectMapper jsonMapper = new ObjectMapper();
 
-	static public final ApiSession oauthLoginPasswordFlow(ApiConfig c) {
-		if(c.getClientId()==null) throw new IllegalStateException("clientId cannot be null");
-		if(c.getClientSecret()==null) throw new IllegalStateException("clientSecret cannot be null");
-		if(c.getUsername()==null) throw new IllegalStateException("username cannot be null");
-		if(c.getPassword()==null) throw new IllegalStateException("password cannot be null");
+	static public final ApiSession oauthLoginPasswordFlow(ApiConfig config) {
+		if(config.getClientId()==null) throw new IllegalStateException("clientId cannot be null");
+		if(config.getClientSecret()==null) throw new IllegalStateException("clientSecret cannot be null");
+		if(config.getUsername()==null) throw new IllegalStateException("username cannot be null");
+		if(config.getPassword()==null) throw new IllegalStateException("password cannot be null");
 		try (InputStream is=Http.send(HttpRequest.formPost()
-						.url(c.getLoginEndpoint()+"/services/oauth2/token")
+						.url(config.getLoginEndpoint()+"/services/oauth2/token")
 						.param("grant_type","password")
-						.param("client_id",c.getClientId())
-						.param("client_secret", c.getClientSecret())
-						.param("username",c.getUsername())
-						.param("password",c.getPassword())
+						.param("client_id",config.getClientId())
+						.param("client_secret", config.getClientSecret())
+						.param("username",config.getUsername())
+						.param("password",config.getPassword()),
+						config.getHttpsProxy()
 					).getStream()){
 			@SuppressWarnings("unchecked")
 			Map<String,Object> resp = jsonMapper.readValue(is,Map.class);
@@ -49,11 +50,11 @@ public class Auth {
 	}
 
 	
-	static public final ApiSession soaploginPasswordFlow(ApiConfig c) {
-		if(c.getUsername()==null) throw new IllegalStateException("username cannot be null");
-		if(c.getPassword()==null) throw new IllegalStateException("password cannot be null");
+	static public final ApiSession soaploginPasswordFlow(ApiConfig config) {
+		if(config.getUsername()==null) throw new IllegalStateException("username cannot be null");
+		if(config.getPassword()==null) throw new IllegalStateException("password cannot be null");
 		try {
-			URL url = new URL(c.getLoginEndpoint()+"/services/Soap/u/23.0");
+			URL url = new URL(config.getLoginEndpoint()+"/services/Soap/u/23.0");
 			HttpURLConnection conn = (HttpURLConnection) url.openConnection();
 			conn.setDoOutput(true);
 			conn.addRequestProperty("Content-Type", "text/xml");
@@ -66,8 +67,8 @@ public class Auth {
 					"              xmlns:env=\"http://schemas.xmlsoap.org/soap/envelope/\">\n"+
 					"    <env:Body>\n"+
 			        "        <n1:login xmlns:n1=\"urn:partner.soap.sforce.com\">\n"+
-			        "            <n1:username>"+c.getUsername()+"</n1:username>\n"+
-			        "            <n1:password>"+c.getPassword()+"</n1:password>\n"+
+			        "            <n1:username>"+config.getUsername()+"</n1:username>\n"+
+			        "            <n1:password>"+config.getPassword()+"</n1:password>\n"+
 			        "        </n1:login>\n"+
 			        "    </env:Body>\n"+
 			        "</env:Envelope>\n").getBytes("UTF-8");
@@ -133,7 +134,8 @@ public class Auth {
 						.param("client_id",res.apiConfig.getClientId())
 						.param("client_secret", res.apiConfig.getClientSecret())
 						.param("redirect_uri",res.apiConfig.getRedirectURI())
-						.preEncodedParam("code",res.code)
+						.preEncodedParam("code",res.code),
+						res.apiConfig.getHttpsProxy()
 					).getStream()){
 			Map<?,?> resp = jsonMapper.readValue(
 					is,Map.class);
@@ -162,7 +164,8 @@ public class Auth {
 						.param("grant_type","refresh_token")
 						.param("client_id",config.getClientId())
 						.param("client_secret", config.getClientSecret())
-						.param("refresh_token", refreshToken)
+						.param("refresh_token", refreshToken),
+						config.getHttpsProxy()
 					).getStream()){
 			Map<?,?> resp = jsonMapper.readValue(is,Map.class);
 
@@ -190,7 +193,8 @@ public class Auth {
 		try (InputStream is=Http.send(HttpRequest.formPost()
 				.header("Accept","*/*")
 				.url(config.getLoginEndpoint()+"/services/oauth2/revoke")
-				.param("token", token)).getStream()) {
+				.param("token", token),
+				config.getHttpsProxy()).getStream()) {
 		// the above does what it needs to
 		} catch(Throwable t) {
 			// Looks like revoke endpoint closes stream when trying to revoke

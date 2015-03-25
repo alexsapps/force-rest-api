@@ -81,6 +81,12 @@ public class HttpRequest {
 		
 		return this;
 	}
+	
+	public HttpRequest addAllHeaders(List<Header> headers) {
+		this.headers.addAll(headers);
+		
+		return this;
+	}
 
 	public ResponseFormat getResponseFormat() {
 		return responseFormat;
@@ -142,6 +148,14 @@ public class HttpRequest {
 		return this;
 	}
 	
+	public HttpRequest addAllParams(List<Parameter> params) {
+		for(Parameter param : params) {
+			param(param.key, param.value);
+		}
+		
+		return this;
+	}
+	
 //  possible future method
 //	
 //	public HttpRequest content(InputStream value) {
@@ -171,12 +185,33 @@ public class HttpRequest {
 		return b.toString();
 	}
 	
-	public class Header {
+	public static class Header {
 		String key;
 		String value;
 		public Header() {}
 		public Header(String key, String value) {
-			super();
+			this.key = key;
+			this.value = value;
+		}
+		public String getKey() {
+			return key;
+		}
+		public void setKey(String key) {
+			this.key = key;
+		}
+		public String getValue() {
+			return value;
+		}
+		public void setValue(String value) {
+			this.value = value;
+		}
+	}
+	
+	public static class Parameter {
+		String key;
+		String value;
+		public Parameter() {}
+		public Parameter(String key, String value) {
 			this.key = key;
 			this.value = value;
 		}
