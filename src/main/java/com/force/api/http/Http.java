@@ -15,6 +15,7 @@ import java.util.zip.GZIPInputStream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.force.api.ForceApi;
 import com.force.api.exceptions.SFApiException;
 import com.force.api.http.HttpRequest.ResponseFormat;
 
@@ -23,6 +24,7 @@ public class Http {
 	private final static Logger log = LoggerFactory.getLogger(Http.class);
 	private static final int CONN_TIMEOUT = 40000;
 	private static final int READ_TIMEOUT = 40000;
+		
 	static final byte[] readResponse(InputStream stream) throws IOException {
 		BufferedInputStream bin = new BufferedInputStream(stream);
 		ByteArrayOutputStream bout = new ByteArrayOutputStream();
@@ -99,7 +101,10 @@ public class Http {
 				is = gzipResponse ? new GZIPInputStream(conn.getErrorStream()): conn.getErrorStream();
 				HttpResponse r = new HttpResponse().setString(
 						new String(readResponse(is), "UTF-8")).setResponseCode(code);
-				log.error("Bad response code: {} on request:\n{}\nmessage:{}", code, req, r.getString());
+				if (ForceApi.isDebugMode())
+					log.error("Bad response code: {} on request:\n{}\nmessage:{}", code, req, r.getString());
+				else 
+					log.error("Bad response code: {}\nmessage:{}", code, r.getString()); // the request may contain passwords, which should not be written to anyone's log files.
 				return r;
 			}
 		} catch (MalformedURLException e) {

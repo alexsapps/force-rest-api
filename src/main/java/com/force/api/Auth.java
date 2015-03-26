@@ -10,13 +10,12 @@ import java.net.URL;
 import java.net.URLEncoder;
 import java.util.Map;
 
-import com.fasterxml.jackson.core.JsonParseException;
-import com.fasterxml.jackson.databind.JsonMappingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.force.api.exceptions.AuthenticationFailedException;
 import com.force.api.exceptions.SFApiException;
 import com.force.api.http.Http;
 import com.force.api.http.HttpRequest;
+import com.force.api.http.HttpResponse;
 
 public class Auth {
 
@@ -27,23 +26,24 @@ public class Auth {
 		if(config.getClientSecret()==null) throw new IllegalStateException("clientSecret cannot be null");
 		if(config.getUsername()==null) throw new IllegalStateException("username cannot be null");
 		if(config.getPassword()==null) throw new IllegalStateException("password cannot be null");
-		try (InputStream is=Http.send(HttpRequest.formPost()
-						.url(config.getLoginEndpoint()+"/services/oauth2/token")
-						.param("grant_type","password")
-						.param("client_id",config.getClientId())
-						.param("client_secret", config.getClientSecret())
-						.param("username",config.getUsername())
-						.param("password",config.getPassword()),
-						config.getHttpsProxy()
-					).getStream()){
+		HttpResponse response = Http.send(HttpRequest.formPost()
+				.url(config.getLoginEndpoint()+"/services/oauth2/token")
+				.param("grant_type","password")
+				.param("client_id",config.getClientId())
+				.param("client_secret", config.getClientSecret())
+				.param("username",config.getUsername())
+				.param("password",config.getPassword()),
+				config.getHttpsProxy()
+			);
+		
+		if (response.getResponseCode() == 400) {
+			throw new AuthenticationFailedException(400, response.getString());
+		}
+			
+		try (InputStream is=response.getStream()){
 			@SuppressWarnings("unchecked")
 			Map<String,Object> resp = jsonMapper.readValue(is,Map.class);
 			return new ApiSession((String)resp.get("access_token"),(String)resp.get("instance_url"));
-			
-		} catch (JsonParseException e) {
-			throw new SFApiException(e);
-		} catch (JsonMappingException e) {
-			throw new SFApiException(e);
 		} catch (IOException e) {
 			throw new SFApiException(e);
 		}
@@ -144,11 +144,6 @@ public class Auth {
 					.setRefreshToken((String)resp.get("refresh_token"))
 					.setAccessToken((String)resp.get("access_token"))
 					.setApiEndpoint((String)resp.get("instance_url"));
-			
-		} catch (JsonParseException e) {
-			throw new SFApiException(e);
-		} catch (JsonMappingException e) {
-			throw new SFApiException(e);
 		} catch (IOException e) {
 			throw new SFApiException(e);
 		}
@@ -173,11 +168,6 @@ public class Auth {
 					.setAccessToken((String)resp.get("access_token"))
 					.setApiEndpoint((String)resp.get("instance_url"))
 					.setRefreshToken(refreshToken);
-			
-		} catch (JsonParseException e) {
-			throw new SFApiException(e);
-		} catch (JsonMappingException e) {
-			throw new SFApiException(e);
 		} catch (IOException e) {
 			throw new SFApiException(e);
 		}

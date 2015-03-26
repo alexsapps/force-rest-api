@@ -3,12 +3,9 @@ package com.force.api;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.UnsupportedEncodingException;
-import java.net.URLEncoder;
 import java.util.ArrayList;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.Map.Entry;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -17,13 +14,23 @@ import com.fasterxml.jackson.annotation.JsonInclude.Include;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
-import com.fasterxml.jackson.databind.node.JsonNodeFactory;
-import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.force.api.commands.ApiCommandResult;
+import com.force.api.commands.CreateOrUpdateSObjectCommand;
+import com.force.api.commands.CreateSObjectCommand;
+import com.force.api.commands.DeleteSObjectCommand;
+import com.force.api.commands.GetIdentityCommand;
+import com.force.api.commands.GetIdentityUriCommand;
+import com.force.api.commands.GetSObjectCommand;
+import com.force.api.commands.IForceApiCommand;
+import com.force.api.commands.MapQueryCommand;
+import com.force.api.commands.MapQueryMoreCommand;
+import com.force.api.commands.QueryCommand;
+import com.force.api.commands.QueryMoreCommand;
+import com.force.api.commands.UpdateSObjectCommand;
 import com.force.api.exceptions.ApiException;
 import com.force.api.exceptions.AuthenticationFailedException;
 import com.force.api.exceptions.RefreshFailedApiException;
 import com.force.api.exceptions.SFApiException;
-import com.force.api.exceptions.SObjectException;
 import com.force.api.http.Http;
 import com.force.api.http.HttpRequest;
 import com.force.api.http.HttpRequest.ResponseFormat;
@@ -47,7 +54,11 @@ import com.force.api.http.HttpResponse;
 public class ForceApi {
 	private static final Logger log = LoggerFactory.getLogger(ForceApi.class);
 	private static final ObjectMapper jsonMapper;
-
+	
+	private static boolean debug;
+	public static boolean isDebugMode() { return debug; }
+	public static void setDebugMode() { debug = true; }
+	
 	static {
 		jsonMapper = new ObjectMapper();
 		jsonMapper.configure(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS, false);
@@ -55,16 +66,22 @@ public class ForceApi {
 	}
 
 	public static ObjectMapper getMapper() { return jsonMapper; }
+	
 	final private ApiConfig config;
 	private ApiSession session;
 	private boolean autoRenew = false;
-	private TokenRenewalObserver observer=null; 
-	private boolean gzip=false;
+	private TokenRenewalObserver observer = null; 
+	private boolean gzip = false;
+	
 	public ForceApi(ApiConfig config, ApiSession session) {
+		this(config,session,true);
+	}
+	
+	public ForceApi(ApiConfig config, ApiSession session, boolean autoRenew) {
 		this.config = config;
 		this.setSession(session);
 		if(session.getRefreshToken()!=null) {
-			autoRenew = true;
+			this.autoRenew = autoRenew;
 		}
 	}
 
@@ -76,7 +93,6 @@ public class ForceApi {
 		config = apiConfig;
 		setSession(Auth.authenticate(apiConfig));
 		autoRenew  = true;
-
 	}
 	
 	public void setGzip(boolean gzip) {
@@ -84,189 +100,15 @@ public class ForceApi {
 	}
 
 	public Identity getIdentity() {
-		try (InputStream is=
-				apiRequest(new HttpRequest(ResponseFormat.STREAM)
-				.url(uriBase())
-				.method("GET")
-				.header("Accept", "application/json")
-				)
-				.getStream()) {
-			@SuppressWarnings("unchecked")
-			Map<String,Object> resp = jsonMapper.readValue(
-					is,Map.class);
-			log.debug("ID="+((String) resp.get("identity")));
-			return getIdentity((String) resp.get("identity"));
-		} catch (IOException e) {
-			throw new SFApiException(e);
-		}
+		String identityUri = execute(new GetIdentityUriCommand());
+		return getIdentity(identityUri);
 	}
-
 	public Identity getIdentity(String identityURL) {
-		try (InputStream is=
-				apiRequest(new HttpRequest(ResponseFormat.STREAM)
-				.url(identityURL)
-				.method("GET")
-				.header("Accept", "application/json")
-			).getStream() )  {
-			return jsonMapper.readValue(
-					is, Identity.class);
-		} catch (IOException e) {
-			throw new SFApiException(e);
-		}
-
+		return execute(new GetIdentityCommand(identityURL));
 	}
-
-	public ResourceRepresentation getSObject(String type, String id) throws SFApiException {
-		// Should we return null or throw an exception if the record is not found?
-		// Right now will just throw crazy runtimeexception with no explanation
-		return new ResourceRepresentation(apiRequest(new HttpRequest(ResponseFormat.STREAM)
-					.url(uriBase()+"/sobjects/"+type+"/"+id)
-					.method("GET")
-					.header("Accept", "application/json")));
-	}
-
-	public String createSObject(String type, Object sObject) { 
-		return createSObject(type, sObject, jsonMapper);
-	}
-	public String createSObject(String type, Object sObject, ObjectMapper mapper) {
-		try (InputStream is=apiRequest(new HttpRequest(ResponseFormat.STREAM)
-					.url(uriBase()+"/sobjects/"+type)
-					.method("POST")
-					.header("Accept", "application/json")
-					.header("Content-Type", "application/json")
-					.expectsCode(201)
-					.content(mapper.writeValueAsBytes(sObject))).getStream()){
-			// We're trying to keep Http classes clean with no reference to JSON/Jackson
-			// Therefore, we serialize to bytes before we pass object to HttpRequest().
-			// But it would be nice to have a streaming implementation. We can do that
-			// by using ObjectMapper.writeValue() passing in output stream, but then we have
-			// polluted the Http layer.
-			CreateResponse result = jsonMapper.readValue(is,CreateResponse.class);
-
-			if (result.isSuccess()) {
-				return (result.getId());
-			} else {
-				throw new SObjectException(result.getErrors());
-			}
-		} catch (IOException e) {
-			throw new SFApiException(e);
-		}
-	}
-
-	public void updateSObject(String type, String id, Object sObject) {
-		updateSObject(type, id, sObject, jsonMapper);
-	}
-	public void updateSObject(String type, String id, Object sObject, ObjectMapper mapper) {
-		try (InputStream is=apiRequest(new HttpRequest(ResponseFormat.STREAM)
-				.url(uriBase()+"/sobjects/"+type+"/"+id+"?_HttpMethod=PATCH")
-				.method("POST")
-				.header("Accept", "application/json")
-				.header("Content-Type", "application/json")
-				.expectsCode(204)
-				.content(mapper.writeValueAsBytes(sObject))
-			).getStream()){
-			// See createSObject for note on streaming ambition
-		} catch (IOException e) {
-			throw new SFApiException(e);
-		}
-	}
-
-	public void deleteSObject(String type, String id) {
-		try (InputStream is=apiRequest(new HttpRequest(ResponseFormat.STREAM)
-			.url(uriBase()+"/sobjects/"+type+"/"+id)
-			.method("DELETE")).getStream()
-		) {
-			// whee
-		} catch (IOException e) {
-			throw new SFApiException(e);
-		}
-	}
-
-	public CreateOrUpdateResult createOrUpdateSObject(String type, String externalIdField, String externalIdValue, Object sObject) {
-		InputStream is=null;
-		try {
-			// See createSObject for note on streaming ambition
-			HttpResponse res =
-				apiRequest(new HttpRequest(ResponseFormat.STREAM)
-					.url(uriBase()+"/sobjects/"+type+"/"+externalIdField+"/"+URLEncoder.encode(externalIdValue,"UTF-8")+"?_HttpMethod=PATCH")
-					.method("POST")
-					.header("Accept", "application/json")
-					.header("Content-Type", "application/json")
-					.content(jsonMapper.writeValueAsBytes(sObject))
-				);			
-			is=res.getStream();
-			if(res.getResponseCode()==201) {				
-				return CreateOrUpdateResult.CREATED;
-			} else if(res.getResponseCode()==204) {
-				return CreateOrUpdateResult.UPDATED;
-			} else {
-				throw new ApiException(res.getResponseCode(), res.getString());
-			}
-		} catch (IOException e) {
-			throw new SFApiException(e);
-		} finally {
-			if (is !=null)
-				try {
-					is.close();
-				} catch (IOException e) {
-					throw new SFApiException(e);
-				}
-		}
-
-	}
-
-	public <T> QueryResult<T> query(String query, Class<T> clazz) {
-        try {
-            return queryAny(uriBase() + "/query/?q=" + URLEncoder.encode(query, "UTF-8"), clazz);
-        } catch (UnsupportedEncodingException e) {
-            throw new SFApiException(e);
-        }
-    }
-
-	@SuppressWarnings("rawtypes")
-	public QueryResult<Map> query(String query) {
-		return query(query, Map.class);
-	}
-
-    public <T> QueryResult<T> queryMore(String nextRecordsUrl, Class<T> clazz) {
-        return queryAny(getSession().getApiEndpoint() + nextRecordsUrl, clazz);
-    }
-
-    @SuppressWarnings("rawtypes")
-	public QueryResult<Map> queryMore(String nextRecordsUrl) {
-        return queryMore(nextRecordsUrl, Map.class);
-    }
-
-    private <T> QueryResult<T> queryAny(String queryUrl, Class<T> clazz) {
-        try (InputStream is= apiRequest(new HttpRequest(ResponseFormat.STREAM)
-                    .url(queryUrl)
-                    .method("GET")
-                    .header("Accept", "application/json")
-                    .expectsCode(200)).getStream()){
-            
-            // We build the result manually, because we can't pass the type information easily into
-            // the JSON parser mechanism.
-
-            QueryResult<T> result = new QueryResult<T>();
-            JsonNode root = jsonMapper.readTree(is);
-            result.setDone(root.get("done").booleanValue());
-            result.setTotalSize(root.get("totalSize").intValue());
-            if (root.get("nextRecordsUrl") != null) {
-                result.setNextRecordsUrl(root.get("nextRecordsUrl").textValue());
-            }
-            List<T> records = new ArrayList<T>();
-            for (JsonNode elem : root.get("records")) {
-                records.add(jsonMapper.readValue(
-                		jsonMapper.treeAsTokens(normalizeCompositeResponse(elem)), clazz));
-            }
-            result.setRecords(records);
-            return result;
-        } catch (IOException e) {
-            throw new SFApiException(e);
-        }
-    }
 
     public DescribeGlobal describeGlobal() {
+    	//TODO - convert to command
 		try (InputStream is=apiRequest(new HttpRequest(ResponseFormat.STREAM)
 					.url(uriBase()+"/sobjects/")
 					.method("GET")
@@ -280,6 +122,7 @@ public class ForceApi {
 	}
 
     public <T> DiscoverSObject<T> discoverSObject(String sobject, Class<T> clazz) {
+    	//TODO - convert to command
         try (InputStream is=apiRequest(new HttpRequest(ResponseFormat.STREAM)
                     .url(uriBase() + "/sobjects/" + sobject)
                     .method("GET")
@@ -301,6 +144,7 @@ public class ForceApi {
     }
 
 	public DescribeSObject describeSObject(String sobject) {
+		//TODO - convert to command
 		try (InputStream is=apiRequest(new HttpRequest(ResponseFormat.STREAM)
 					.url(uriBase()+"/sobjects/"+sobject+"/describe")
 					.method("GET")
@@ -315,48 +159,21 @@ public class ForceApi {
 		return(getSession().getApiEndpoint()+"/services/data/"+config.getApiVersion());
 	}
 	
-	public final HttpResponse customApiRequest(IForceApiCommand command) {
-		HttpRequest req = new HttpRequest(command.getResponseFormat())
-			.method(command.getMethod())
-			.content(command.getContent())
-			.expectsCode(command.getExpectedCode())
-			.url(uriBase() + command.getRelativeUri())
-			.addAllHeaders(command.getHeaders())
-			.addAllParams(command.getParameters());
-		
-		return apiRequest(req);
+	public final <T> T execute(IForceApiCommand<T> command) throws SFApiException {
+		return executeGetResponse(command).getResult();
 	}
 	
+	public final <T> ApiCommandResult<T> executeGetResponse(IForceApiCommand<T> command) throws SFApiException {
+		HttpRequest req = command.toHttpRequest(uriBase(), getSession().getApiEndpoint());
+		HttpResponse response = autoRenew ? apiRequestWithAutoRenew(req) : apiRequest(req);
+		return new ApiCommandResult<T>(response, command.interpretResult(response));
+	}
+
 	private final HttpResponse apiRequest(HttpRequest req) {
-		
 		req.setAuthorization("OAuth "+getSession().getAccessToken());
-		req.gzip(gzip);              
+		req.gzip(gzip);
 		HttpResponse res = Http.send(req, config.getHttpsProxy());
-		if(res.getResponseCode()==401) {
-			// Perform one attempt to auto renew session if possible
-			if(autoRenew) {
-				log.debug("Session expired. Refreshing session...");
-				if (this.observer !=null) this.observer.tokenNeedsRenewal(getSession().getAccessToken(), getSession().getRefreshToken());
-				if(getSession().getRefreshToken()!=null) {
-					try {
-						setSession(Auth.refreshOauthTokenFlow(config, getSession().getRefreshToken()));
-						if (this.observer !=null) this.observer.tokenRenewedSuccessfully(session);
-					} catch (RuntimeException e) {
-						if (this.observer !=null) this.observer.tokenNotRenewedSuccessfully();
-						throw e;
-					}
-				} else {
-					setSession(Auth.authenticate(config));
-				}
-				req.setAuthorization("OAuth "+getSession().getAccessToken());
-				res = Http.send(req, config.getHttpsProxy());
-				if (res.getResponseCode()==401) throw new RefreshFailedApiException(401,"Tried to refresh but failed.");
-			} else {
-				if (this.observer !=null) this.observer.tokenNotRenewedSuccessfully();
-				throw new AuthenticationFailedException(401,"No refresh token, and 401 found");
-			}
-			
-		}
+		
 		if(res.getResponseCode()>299) {
 			if(res.getResponseCode()==401) {
 				throw new AuthenticationFailedException(401,res.getString());
@@ -371,91 +188,47 @@ public class ForceApi {
 		}
 	}
 	
-	/**
-	 * Normalizes the JSON response in case it contains responses from
-	 * Relationsip queries. For e.g.
-	 * 
-	 * <code>
-	 * Query:
-	 *   select Id,Name,(select Id,Email,FirstName from Contacts) from Account
-	 *   
-	 * Json Response Returned:
-	 * 
-	 * {
-	 *	  "totalSize" : 1,
-	 *	  "done" : true,
-	 *	  "records" : [ {
-	 *	    "attributes" : {
-	 *	      "type" : "Account",
-	 *	      "url" : "/services/data/v24.0/sobjects/Account/0017000000TcinJAAR"
-	 *	    },
-	 *	    "Id" : "0017000000TcinJAAR",
-	 *	    "Name" : "test_acc_04_01",
-	 *	    "Contacts" : {
-	 *	      "totalSize" : 1,
-	 *	      "done" : true,
-	 *	      "records" : [ {
-	 *	        "attributes" : {
-	 *	          "type" : "Contact",
-	 *	          "url" : "/services/data/v24.0/sobjects/Contact/0037000000zcgHwAAI"
-	 *	        },
-	 *	        "Id" : "0037000000zcgHwAAI",
-	 *	        "Email" : "contact@email.com",
-	 *	        "FirstName" : "John"
-	 *	      } ]
-	 *	    }
-	 *	  } ]
-	 *	}
-	 * </code>
-	 * 
-	 * Will get normalized to:
-	 * 
-	 * <code>
-	 * {
-	 *	  "totalSize" : 1,
-	 *	  "done" : true,
-	 *	  "records" : [ {
-	 *	    "attributes" : {
-	 *	      "type" : "Account",
-	 *	      "url" : "/services/data/v24.0/sobjects/Account/accountId"
-	 *	    },
-	 *	    "Id" : "accountId",
-	 *	    "Name" : "test_acc_04_01",
-	 *	    "Contacts" : [ {
-	 *	        "attributes" : {
-	 *	          "type" : "Contact",
-	 *	          "url" : "/services/data/v24.0/sobjects/Contact/contactId"
-	 *	        },
-	 *	        "Id" : "contactId",
-	 *	        "Email" : "contact@email.com",
-	 *	        "FirstName" : "John"
-	 *	    } ]
-	 *	  } ]
-	 *	} 
-	 * </code
-	 * 
-	 * This allows Jackson to deserialize the response into it's corresponding Object representation
-	 * 
-	 * @param node 
-	 * @return
-	 */
-	private final JsonNode normalizeCompositeResponse(JsonNode node){
-		Iterator<Entry<String, JsonNode>> elements = node.fields();
-		ObjectNode newNode = JsonNodeFactory.instance.objectNode();
-		Entry<String, JsonNode> currNode;
-		while(elements.hasNext()){
-			currNode = elements.next();
+	private final HttpResponse apiRequestWithAutoRenew(HttpRequest req) {
+		try {
+			return apiRequest(req);
+		} catch (AuthenticationFailedException ex) {
+			// Perform one attempt to auto renew session if possible
+			log.debug("Session expired. Refreshing session...");
 
-			newNode.put(currNode.getKey(), 
-						(		currNode.getValue().isObject() && 
-								currNode.getValue().get("records")!=null
-						)?
-								currNode.getValue().get("records"):
-									currNode.getValue()
-					);
+			if(autoRenew) {
+				autoRenew();
+			} else {
+				if (this.observer != null)
+					this.observer.tokenNotRenewedSuccessfully();
+				
+				throw new AuthenticationFailedException(401,"No refresh token, and 401 found");
+			}
+			
+			try {
+				return apiRequest(req);
+			} catch (AuthenticationFailedException ex2) {
+				throw new RefreshFailedApiException(401,"Tried to refresh but failed.");
+			}
 		}
-		return newNode;
+	}
+
+	private void autoRenew() {		
+		if (this.observer !=null)
+			this.observer.tokenNeedsRenewal(getSession().getAccessToken(), getSession().getRefreshToken());
 		
+		if(getSession().getRefreshToken()!=null) {
+			try {
+				setSession(Auth.refreshOauthTokenFlow(config, getSession().getRefreshToken()));
+				if (this.observer !=null)
+					this.observer.tokenRenewedSuccessfully(session);
+			} catch (RuntimeException e) {
+				if (this.observer !=null)
+					this.observer.tokenNotRenewedSuccessfully();
+				throw e;
+			}
+		} else {
+			setSession(Auth.authenticate(config));
+		}
 	}
 
 	public ApiConfig getConfig() {
@@ -477,4 +250,74 @@ public class ForceApi {
 	public void setTokenRenewalObserver(TokenRenewalObserver observer) {
 		this.observer = observer;
 	}
+	
+	
+	/**
+	 * @deprecated Please use execute(GetSObjectCommand) instead.
+	 */
+	@Deprecated public ResourceRepresentation getSObject(String type, String id) throws SFApiException {
+		return execute(new GetSObjectCommand(type, id));
+	}
+	/**
+	 * @deprecated Please use execute(CreateSObjectCommand) instead.
+	 */
+	@Deprecated public String createSObject(String type, Object sObject) { 
+		return execute(new CreateSObjectCommand(type, sObject));
+	}
+	/**
+	 * @deprecated Please use execute(CreateSObjectCommand) instead.
+	 */
+	@Deprecated public String createSObject(String type, Object sObject, ObjectMapper mapper) {
+		return execute(new CreateSObjectCommand(type, sObject, mapper));
+	}
+	/**
+	 * @deprecated Please use execute() instead.
+	 */
+	@Deprecated public void updateSObject(String type, String id, Object sObject) {
+		execute(new UpdateSObjectCommand(type, id, sObject));
+	}
+	/**
+	 * @deprecated Please use execute(UpdateSObjectCommand) instead.
+	 */
+	@Deprecated public void updateSObject(String type, String id, Object sObject, ObjectMapper mapper) {
+		execute(new UpdateSObjectCommand(type, id, sObject, mapper));
+	}
+	/**
+	 * @deprecated Please use execute(DeleteSObjectCommand) instead.
+	 */
+	@Deprecated public void deleteSObject(String type, String id) {
+		execute(new DeleteSObjectCommand(type, id));
+	}
+	/**
+	 * @deprecated Please use execute(CreateOrUpdateSObjectCommand) instead.
+	 */
+	@Deprecated public CreateOrUpdateResult createOrUpdateSObject(String type, String externalIdField, String externalIdValue, Object sObject) {	
+		return this.execute(new CreateOrUpdateSObjectCommand(type, externalIdField, externalIdValue, sObject));
+	}
+	/**
+	 * @deprecated Please use execute(QueryCommand)  instead.
+	 */
+	@Deprecated public <T> QueryResult<T> query(String query, Class<T> clazz) {
+        return execute(new QueryCommand<T>(query, clazz));
+    }
+	/**
+	 * @deprecated Please use execute(MapQueryCommand) instead.
+	 */
+	@SuppressWarnings("rawtypes")
+	@Deprecated public QueryResult<Map> query(String query) {
+		return execute(new MapQueryCommand(query));
+	}
+	/**
+	 * @deprecated Please use execute(QueryMoreCommand) instead.
+	 */
+	@Deprecated public <T> QueryResult<T> queryMore(String nextRecordsUrl, Class<T> clazz) {
+    	return execute(new QueryMoreCommand<T>(nextRecordsUrl, clazz));
+    }
+	/**
+	 * @deprecated Please use execute(MapQueryMoreCommand) instead.
+	 */
+    @SuppressWarnings("rawtypes")
+    @Deprecated public QueryResult<Map> queryMore(String nextRecordsUrl) {
+    	return execute(new MapQueryMoreCommand(nextRecordsUrl));
+    }
 }
