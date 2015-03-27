@@ -11,7 +11,7 @@ import com.force.api.http.HttpRequest;
  */
 public class ChangePasswordCommand extends ForceApiCommand<Object> {
     	
-	public ChangePasswordCommand(String userId, String newPassword) {
+	public ChangePasswordCommand(final String userId, final String newPassword) {
 		
 		 // For more information:
         // https://www.salesforce.com/us/developer/docs/api_rest/Content/dome_sobject_user_password.htm

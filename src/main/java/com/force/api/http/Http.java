@@ -75,7 +75,13 @@ public class Http {
 			int code = conn.getResponseCode();
 			String encoding=conn.getContentEncoding();
 			boolean gzipResponse=encoding != null && encoding.equalsIgnoreCase("gzip");
-			//System.out.println(gzipResponse+" "+encoding);
+			
+			if (ForceApi.isDebugMode()) {
+				log.info(gzipResponse+" "+encoding);
+				log.info(conn.toString());
+				log.info(req.toString());
+			}
+			
 			if (code < 300 && code >= 200) {
 				
 				is = gzipResponse ? new GZIPInputStream(conn.getInputStream()): conn.getInputStream();
